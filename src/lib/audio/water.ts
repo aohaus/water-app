@@ -2,15 +2,54 @@ import { createNoiseNode } from "./context";
 import { randomWalk, scheduleSparse, type Cancel } from "./scheduler";
 import type { SoundEngine } from "./types";
 
-// A flowing stream: a filtered noise "body" whose resonant frequency
-// wanders slowly, a brighter "sparkle" layer for trickling highlights,
-// and a very occasional, very quiet distant bird call so it reads as an
-// outdoor stream rather than a plumbing leak — without ever becoming a
-// obvious, learnable loop.
+// A quiet stream heard from a little distance — like sitting on the engawa
+// of a Japanese garden. The character comes from individual resonant
+// droplet "plinks" (a short noise burst ringing through a high-Q bandpass
+// filter) rather than a wall of broadband noise, with only a faint,
+// heavily-filtered wash underneath for a sense of distance. A very rare,
+// quiet bird call keeps it reading as outdoors.
 export function createWaterEngine(ctx: AudioContext, destination: AudioNode): SoundEngine {
   let cancels: Cancel[] = [];
   let nodes: AudioNode[] = [];
   let running = false;
+
+  function droplet(target: AudioNode) {
+    const now = ctx.currentTime;
+
+    const impulse = createNoiseNode(ctx);
+    const gate = ctx.createGain();
+    gate.gain.setValueAtTime(0, now);
+    gate.gain.linearRampToValueAtTime(1, now + 0.002);
+    gate.gain.linearRampToValueAtTime(0, now + 0.018);
+
+    const resonant = ctx.createBiquadFilter();
+    resonant.type = "bandpass";
+    const baseFreq = 1100 + Math.random() * 2000;
+    resonant.frequency.setValueAtTime(baseFreq, now);
+    resonant.frequency.exponentialRampToValueAtTime(baseFreq * 0.7, now + 0.28);
+    resonant.Q.value = 16 + Math.random() * 12;
+
+    const dropletGain = ctx.createGain();
+    const peak = 0.006 + Math.random() * 0.006;
+    dropletGain.gain.setValueAtTime(0.0001, now);
+    dropletGain.gain.linearRampToValueAtTime(peak, now + 0.01);
+    dropletGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25 + Math.random() * 0.25);
+
+    impulse.connect(gate).connect(resonant).connect(dropletGain).connect(target);
+
+    const cleanupMs = 700;
+    setTimeout(() => {
+      [impulse, gate, resonant, dropletGain].forEach((n) => n.disconnect());
+    }, cleanupMs);
+
+    // Streams often "plink" in quick little clusters rather than perfectly evenly.
+    if (Math.random() < 0.15) {
+      const delay = 60 + Math.random() * 120;
+      setTimeout(() => {
+        if (running) droplet(target);
+      }, delay);
+    }
+  }
 
   function chirp(target: AudioNode) {
     const now = ctx.currentTime;
@@ -24,7 +63,7 @@ export function createWaterEngine(ctx: AudioContext, destination: AudioNode): So
       osc.frequency.setValueAtTime(baseFreq, start);
       osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.4, start + 0.09);
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.05, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.04, start + 0.015);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.14);
       osc.connect(gain);
       gain.connect(target);
@@ -43,42 +82,22 @@ export function createWaterEngine(ctx: AudioContext, destination: AudioNode): So
       engineGain.gain.linearRampToValueAtTime(1, ctx.currentTime + 1.5);
       engineGain.connect(destination);
 
+      // Faint distant wash, heavily lowpassed to feel far away.
       const noise = createNoiseNode(ctx);
+      const bed = ctx.createBiquadFilter();
+      bed.type = "lowpass";
+      bed.frequency.value = 420;
+      const bedGain = ctx.createGain();
+      bedGain.gain.value = 0.006;
 
-      // Body: burbling mid-range resonance
-      const body = ctx.createBiquadFilter();
-      body.type = "bandpass";
-      body.frequency.value = 700;
-      body.Q.value = 1.4;
-      const bodyGain = ctx.createGain();
-      bodyGain.gain.value = 0.55;
+      noise.connect(bed).connect(bedGain).connect(engineGain);
 
-      // Sparkle: brighter trickle highlights, quieter
-      const sparkle = ctx.createBiquadFilter();
-      sparkle.type = "bandpass";
-      sparkle.frequency.value = 2600;
-      sparkle.Q.value = 0.9;
-      const sparkleGain = ctx.createGain();
-      sparkleGain.gain.value = 0.12;
-
-      // Low body warmth
-      const low = ctx.createBiquadFilter();
-      low.type = "lowpass";
-      low.frequency.value = 500;
-      const lowGain = ctx.createGain();
-      lowGain.gain.value = 0.25;
-
-      noise.connect(body).connect(bodyGain).connect(engineGain);
-      noise.connect(sparkle).connect(sparkleGain).connect(engineGain);
-      noise.connect(low).connect(lowGain).connect(engineGain);
-
-      nodes = [engineGain, noise, body, bodyGain, sparkle, sparkleGain, low, lowGain];
+      nodes = [engineGain, noise, bed, bedGain];
 
       cancels = [
-        randomWalk(ctx, body.frequency, { min: 450, max: 950, minSeconds: 6, maxSeconds: 14 }),
-        randomWalk(ctx, sparkle.frequency, { min: 1800, max: 3400, minSeconds: 3, maxSeconds: 9 }),
-        randomWalk(ctx, sparkleGain.gain, { min: 0.05, max: 0.2, minSeconds: 2, maxSeconds: 6 }),
-        randomWalk(ctx, bodyGain.gain, { min: 0.45, max: 0.65, minSeconds: 4, maxSeconds: 10 }),
+        randomWalk(ctx, bed.frequency, { min: 300, max: 520, minSeconds: 8, maxSeconds: 18 }),
+        randomWalk(ctx, bedGain.gain, { min: 0.004, max: 0.009, minSeconds: 5, maxSeconds: 12 }),
+        scheduleSparse(0.5, 1.6, () => droplet(engineGain)),
         scheduleSparse(45, 150, () => chirp(engineGain)),
       ];
     },
