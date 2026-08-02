@@ -2,18 +2,23 @@ import { createNoiseNode } from "./context";
 import { randomWalk, scheduleSparse, type Cancel } from "./scheduler";
 import type { SoundEngine } from "./types";
 
-// A quiet stream heard from a little distance — like sitting on the engawa
-// of a Japanese garden. The character comes from individual resonant
-// droplet "plinks" (a short noise burst ringing through a high-Q bandpass
-// filter) rather than a wall of broadband noise, with only a faint,
-// heavily-filtered wash underneath for a sense of distance. A very rare,
-// quiet bird call keeps it reading as outdoors.
+// A shallow garden pond heard from the engawa — not a deep, churning pool.
+// The character comes from individual resonant droplet "plinks" (a short
+// noise burst ringing through a high-Q bandpass filter, pitched high and
+// decaying quickly so it stays light rather than boomy) with only a
+// faint, narrow-band wash underneath. A very rare, quiet bird call keeps
+// it reading as outdoors. Droplet nodes are capped so a run of unlucky
+// clustering can never pile up and overload the audio graph.
 export function createWaterEngine(ctx: AudioContext, destination: AudioNode): SoundEngine {
   let cancels: Cancel[] = [];
   let nodes: AudioNode[] = [];
   let running = false;
+  let activeDroplets = 0;
+  const MAX_ACTIVE_DROPLETS = 8;
 
-  function droplet(target: AudioNode) {
+  function fireDroplet(target: AudioNode) {
+    if (activeDroplets >= MAX_ACTIVE_DROPLETS) return;
+    activeDroplets++;
     const now = ctx.currentTime;
 
     const impulse = createNoiseNode(ctx);
@@ -24,29 +29,34 @@ export function createWaterEngine(ctx: AudioContext, destination: AudioNode): So
 
     const resonant = ctx.createBiquadFilter();
     resonant.type = "bandpass";
-    const baseFreq = 1100 + Math.random() * 2000;
+    const baseFreq = 1800 + Math.random() * 1800;
     resonant.frequency.setValueAtTime(baseFreq, now);
-    resonant.frequency.exponentialRampToValueAtTime(baseFreq * 0.7, now + 0.28);
-    resonant.Q.value = 16 + Math.random() * 12;
+    resonant.frequency.exponentialRampToValueAtTime(baseFreq * 0.85, now + 0.15);
+    resonant.Q.value = 14 + Math.random() * 10;
 
     const dropletGain = ctx.createGain();
-    const peak = 0.006 + Math.random() * 0.006;
+    const peak = 0.014 + Math.random() * 0.01;
     dropletGain.gain.setValueAtTime(0.0001, now);
     dropletGain.gain.linearRampToValueAtTime(peak, now + 0.01);
-    dropletGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25 + Math.random() * 0.25);
+    dropletGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15 + Math.random() * 0.15);
 
     impulse.connect(gate).connect(resonant).connect(dropletGain).connect(target);
 
-    const cleanupMs = 700;
     setTimeout(() => {
       [impulse, gate, resonant, dropletGain].forEach((n) => n.disconnect());
-    }, cleanupMs);
+      activeDroplets--;
+    }, 500);
+  }
 
-    // Streams often "plink" in quick little clusters rather than perfectly evenly.
+  // Streams often "plink" in quick little clusters rather than perfectly
+  // evenly — fire a possible second drop right away, never a chain, so
+  // there is no way for this to run away over a long session.
+  function droplet(target: AudioNode) {
+    fireDroplet(target);
     if (Math.random() < 0.15) {
       const delay = 60 + Math.random() * 120;
       setTimeout(() => {
-        if (running) droplet(target);
+        if (running) fireDroplet(target);
       }, delay);
     }
   }
@@ -76,28 +86,31 @@ export function createWaterEngine(ctx: AudioContext, destination: AudioNode): So
     start() {
       if (running) return;
       running = true;
+      activeDroplets = 0;
 
       const engineGain = ctx.createGain();
       engineGain.gain.value = 0;
       engineGain.gain.linearRampToValueAtTime(1, ctx.currentTime + 1.5);
       engineGain.connect(destination);
 
-      // Faint distant wash, heavily lowpassed to feel far away.
+      // Faint, narrow-band wash underneath — a hum, not a rumble, so it
+      // doesn't read as a large body of moving water.
       const noise = createNoiseNode(ctx);
       const bed = ctx.createBiquadFilter();
-      bed.type = "lowpass";
-      bed.frequency.value = 420;
+      bed.type = "bandpass";
+      bed.frequency.value = 320;
+      bed.Q.value = 0.8;
       const bedGain = ctx.createGain();
-      bedGain.gain.value = 0.006;
+      bedGain.gain.value = 0.011;
 
       noise.connect(bed).connect(bedGain).connect(engineGain);
 
       nodes = [engineGain, noise, bed, bedGain];
 
       cancels = [
-        randomWalk(ctx, bed.frequency, { min: 300, max: 520, minSeconds: 8, maxSeconds: 18 }),
-        randomWalk(ctx, bedGain.gain, { min: 0.004, max: 0.009, minSeconds: 5, maxSeconds: 12 }),
-        scheduleSparse(0.5, 1.6, () => droplet(engineGain)),
+        randomWalk(ctx, bed.frequency, { min: 250, max: 400, minSeconds: 8, maxSeconds: 18 }),
+        randomWalk(ctx, bedGain.gain, { min: 0.008, max: 0.015, minSeconds: 5, maxSeconds: 12 }),
+        scheduleSparse(0.4, 1.3, () => droplet(engineGain)),
         scheduleSparse(45, 150, () => chirp(engineGain)),
       ];
     },

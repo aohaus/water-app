@@ -16,7 +16,7 @@ export function createWavesEngine(ctx: AudioContext, destination: AudioNode): So
     if (!running) return;
     const now = ctx.currentTime;
     const isLull = Math.random() < 0.25;
-    const cycle = isLull ? 12 + Math.random() * 8 : 9 + Math.random() * 7;
+    const cycle = isLull ? 16 + Math.random() * 10 : 14 + Math.random() * 9;
     const peak = isLull ? 0.02 + Math.random() * 0.02 : 0.045 + Math.random() * 0.02;
     const trough = isLull ? 0.008 + Math.random() * 0.01 : 0.032;
     const swellIn = cycle * (0.45 + Math.random() * 0.15);
@@ -46,8 +46,8 @@ export function createWavesEngine(ctx: AudioContext, destination: AudioNode): So
     filter.frequency.value = 450 + Math.random() * 250;
     filter.Q.value = 0.5;
     const gain = ctx.createGain();
-    const duration = 5 + Math.random() * 5;
-    const peak = 0.015 + Math.random() * 0.0125;
+    const duration = 6 + Math.random() * 6;
+    const peak = 0.008 + Math.random() * 0.006;
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.linearRampToValueAtTime(peak, now + duration * 0.45);
     gain.gain.linearRampToValueAtTime(0.0001, now + duration);

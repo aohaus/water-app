@@ -22,14 +22,14 @@ export function createRainEngine(ctx: AudioContext, destination: AudioNode): Sou
 
     const filter = ctx.createBiquadFilter();
     filter.type = "bandpass";
-    filter.frequency.value = 3800 + Math.random() * 3200;
-    filter.Q.value = 2 + Math.random() * 2;
+    filter.frequency.value = 2400 + Math.random() * 2600;
+    filter.Q.value = 1.5 + Math.random() * 1.5;
 
     const tickGain = ctx.createGain();
-    const peak = 0.0007 + Math.random() * 0.0008;
+    const peak = 0.0012 + Math.random() * 0.0012;
     tickGain.gain.setValueAtTime(0.0001, now);
-    tickGain.gain.linearRampToValueAtTime(peak, now + 0.004);
-    tickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05 + Math.random() * 0.05);
+    tickGain.gain.linearRampToValueAtTime(peak, now + 0.005);
+    tickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08 + Math.random() * 0.07);
 
     impulse.connect(gate).connect(filter).connect(tickGain).connect(target);
     setTimeout(() => {
@@ -96,7 +96,7 @@ export function createRainEngine(ctx: AudioContext, destination: AudioNode): Sou
       cancels = [
         randomWalk(ctx, bedGain.gain, { min: 0.0025, max: 0.0055, minSeconds: 4, maxSeconds: 10 }),
         randomWalk(ctx, bed.frequency, { min: 1900, max: 2600, minSeconds: 6, maxSeconds: 14 }),
-        scheduleSparse(0.14, 0.45, () => patter(engineGain)),
+        scheduleSparse(0.22, 0.6, () => patter(engineGain)),
         scheduleSparse(300, 900, () => thunder(engineGain)),
       ];
     },
