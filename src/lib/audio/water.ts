@@ -6,9 +6,12 @@ import type { SoundEngine } from "./types";
 // The character comes from individual resonant droplet "plinks" (a short
 // noise burst ringing through a high-Q bandpass filter, pitched high and
 // decaying quickly so it stays light rather than boomy) with only a
-// faint, narrow-band wash underneath. A very rare, quiet bird call keeps
-// it reading as outdoors. Droplet nodes are capped so a run of unlucky
-// clustering can never pile up and overload the audio graph.
+// faint, narrow-band wash underneath. A very rare, quiet bird call, an
+// occasional koi breaking the surface, and an occasional kajika frog's
+// call (a clear, whistle-like trill — not a croak) keep it reading as a
+// real garden pond, all kept as infrequent and quiet as the bird call so
+// they read as texture, not events. Droplet nodes are capped so a run of
+// unlucky clustering can never pile up and overload the audio graph.
 export function createWaterEngine(ctx: AudioContext, destination: AudioNode): SoundEngine {
   let cancels: Cancel[] = [];
   let nodes: AudioNode[] = [];
@@ -82,6 +85,94 @@ export function createWaterEngine(ctx: AudioContext, destination: AudioNode): So
     }
   }
 
+  function koiSplash(target: AudioNode) {
+    const now = ctx.currentTime;
+
+    // Sharp broadband "slap" as the fish breaks the surface.
+    const slapNoise = createNoiseNode(ctx);
+    const slapFilter = ctx.createBiquadFilter();
+    slapFilter.type = "bandpass";
+    slapFilter.frequency.value = 700 + Math.random() * 500;
+    slapFilter.Q.value = 0.7;
+    const slapGain = ctx.createGain();
+    slapGain.gain.setValueAtTime(0.0001, now);
+    slapGain.gain.exponentialRampToValueAtTime(0.045, now + 0.008);
+    slapGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+    slapNoise.connect(slapFilter).connect(slapGain).connect(target);
+
+    // Lower resonant "plunk" — the weight of the fish displacing water.
+    const plunkNoise = createNoiseNode(ctx);
+    const plunkFilter = ctx.createBiquadFilter();
+    plunkFilter.type = "bandpass";
+    const plunkFreq = 240 + Math.random() * 140;
+    plunkFilter.frequency.setValueAtTime(plunkFreq, now);
+    plunkFilter.frequency.exponentialRampToValueAtTime(plunkFreq * 0.6, now + 0.3);
+    plunkFilter.Q.value = 8 + Math.random() * 4;
+    const plunkGain = ctx.createGain();
+    plunkGain.gain.setValueAtTime(0.0001, now + 0.008);
+    plunkGain.gain.linearRampToValueAtTime(0.035, now + 0.02);
+    plunkGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+    plunkNoise.connect(plunkFilter).connect(plunkGain).connect(target);
+
+    // Faint settling ripples trailing off.
+    const rippleNoise = createNoiseNode(ctx);
+    const rippleFilter = ctx.createBiquadFilter();
+    rippleFilter.type = "lowpass";
+    rippleFilter.frequency.value = 550;
+    const rippleGain = ctx.createGain();
+    rippleGain.gain.setValueAtTime(0.0001, now + 0.05);
+    rippleGain.gain.linearRampToValueAtTime(0.008, now + 0.15);
+    rippleGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
+    rippleNoise.connect(rippleFilter).connect(rippleGain).connect(target);
+
+    setTimeout(() => {
+      [
+        slapNoise,
+        slapFilter,
+        slapGain,
+        plunkNoise,
+        plunkFilter,
+        plunkGain,
+        rippleNoise,
+        rippleFilter,
+        rippleGain,
+      ].forEach((n) => n.disconnect());
+    }, 1400);
+  }
+
+  // Kajika frogs (カジカガエル) have a clear, bird-like whistling trill —
+  // nothing like a typical croak — so it reads as delicate rather than busy.
+  function kajikaCall(target: AudioNode) {
+    const now = ctx.currentTime;
+    const noteCount = 4 + Math.floor(Math.random() * 4);
+    const baseFreq = 2400 + Math.random() * 600;
+
+    for (let i = 0; i < noteCount; i++) {
+      const start = now + i * 0.09;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      const freq = baseFreq * (1 - i * 0.015);
+      osc.frequency.setValueAtTime(freq, start);
+
+      const vibrato = ctx.createOscillator();
+      const vibratoGain = ctx.createGain();
+      vibrato.frequency.value = 18;
+      vibratoGain.gain.value = 15;
+      vibrato.connect(vibratoGain).connect(osc.frequency);
+
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.022, start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.07);
+
+      osc.connect(gain).connect(target);
+      osc.start(start);
+      osc.stop(start + 0.08);
+      vibrato.start(start);
+      vibrato.stop(start + 0.08);
+    }
+  }
+
   return {
     start() {
       if (running) return;
@@ -112,6 +203,8 @@ export function createWaterEngine(ctx: AudioContext, destination: AudioNode): So
         randomWalk(ctx, bedGain.gain, { min: 0.004, max: 0.0075, minSeconds: 5, maxSeconds: 12 }),
         scheduleSparse(0.4, 1.3, () => droplet(engineGain)),
         scheduleSparse(45, 150, () => chirp(engineGain)),
+        scheduleSparse(60, 180, () => koiSplash(engineGain)),
+        scheduleSparse(60, 180, () => kajikaCall(engineGain)),
       ];
     },
     stop() {
