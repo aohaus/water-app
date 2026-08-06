@@ -35,7 +35,7 @@ export function createWaterEngine(ctx: AudioContext, destination: AudioNode): So
     resonant.Q.value = 14 + Math.random() * 10;
 
     const dropletGain = ctx.createGain();
-    const peak = 0.021 + Math.random() * 0.015;
+    const peak = 0.032 + Math.random() * 0.023;
     dropletGain.gain.setValueAtTime(0.0001, now);
     dropletGain.gain.linearRampToValueAtTime(peak, now + 0.01);
     dropletGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15 + Math.random() * 0.15);
