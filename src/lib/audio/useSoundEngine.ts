@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { ensureAudio, isWorkletReady } from "./context";
+import { ensureAudio, isWorkletReady, unlockHtmlAudio } from "./context";
 import type { EngineFactory, SoundEngine } from "./types";
 
 export function useSoundEngine(factory: EngineFactory, label: string) {
@@ -12,6 +12,9 @@ export function useSoundEngine(factory: EngineFactory, label: string) {
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
 
   const toggle = useCallback(async () => {
+    // Must happen synchronously, before any await, to stay tied to the tap.
+    unlockHtmlAudio();
+
     if (engineRef.current) {
       engineRef.current.stop();
       engineRef.current = null;
