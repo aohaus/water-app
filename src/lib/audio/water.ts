@@ -35,7 +35,7 @@ export function createWaterEngine(ctx: AudioContext, destination: AudioNode): So
     resonant.Q.value = 14 + Math.random() * 10;
 
     const dropletGain = ctx.createGain();
-    const peak = 0.014 + Math.random() * 0.01;
+    const peak = 0.021 + Math.random() * 0.015;
     dropletGain.gain.setValueAtTime(0.0001, now);
     dropletGain.gain.linearRampToValueAtTime(peak, now + 0.01);
     dropletGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15 + Math.random() * 0.15);
@@ -73,7 +73,7 @@ export function createWaterEngine(ctx: AudioContext, destination: AudioNode): So
       osc.frequency.setValueAtTime(baseFreq, start);
       osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.4, start + 0.09);
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.04, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.02, start + 0.015);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.14);
       osc.connect(gain);
       gain.connect(target);
@@ -101,7 +101,7 @@ export function createWaterEngine(ctx: AudioContext, destination: AudioNode): So
       bed.frequency.value = 320;
       bed.Q.value = 0.8;
       const bedGain = ctx.createGain();
-      bedGain.gain.value = 0.011;
+      bedGain.gain.value = 0.0055;
 
       noise.connect(bed).connect(bedGain).connect(engineGain);
 
@@ -109,7 +109,7 @@ export function createWaterEngine(ctx: AudioContext, destination: AudioNode): So
 
       cancels = [
         randomWalk(ctx, bed.frequency, { min: 250, max: 400, minSeconds: 8, maxSeconds: 18 }),
-        randomWalk(ctx, bedGain.gain, { min: 0.008, max: 0.015, minSeconds: 5, maxSeconds: 12 }),
+        randomWalk(ctx, bedGain.gain, { min: 0.004, max: 0.0075, minSeconds: 5, maxSeconds: 12 }),
         scheduleSparse(0.4, 1.3, () => droplet(engineGain)),
         scheduleSparse(45, 150, () => chirp(engineGain)),
       ];
