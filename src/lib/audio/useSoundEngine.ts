@@ -8,6 +8,7 @@ export function useSoundEngine(factory: EngineFactory, label: string) {
   const engineRef = useRef<SoundEngine | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const toggle = useCallback(async () => {
     if (engineRef.current) {
@@ -17,16 +18,19 @@ export function useSoundEngine(factory: EngineFactory, label: string) {
       return;
     }
     setIsLoading(true);
+    setError(null);
     try {
       const { ctx, master } = await ensureAudio();
       const engine = factory(ctx, master);
       engine.start();
       engineRef.current = engine;
       setIsPlaying(true);
+    } catch (err) {
+      setError(`${label}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsLoading(false);
     }
-  }, [factory]);
+  }, [factory, label]);
 
-  return { isPlaying, isLoading, toggle, label };
+  return { isPlaying, isLoading, error, toggle, label };
 }

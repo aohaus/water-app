@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SoundButton } from "@/components/SoundButton";
 import { DonateButton } from "@/components/DonateButton";
 import { DropIcon, WaveIcon, RainIcon } from "@/components/icons";
@@ -10,10 +10,37 @@ import { createWaterEngine } from "@/lib/audio/water";
 import { createWavesEngine } from "@/lib/audio/waves";
 import { createRainEngine } from "@/lib/audio/rain";
 
+// Temporary on-screen diagnostics: there is no remote console access while
+// debugging "no sound" reports from inside World App, so surface any error
+// directly on the page instead of only logging it.
+function useGlobalErrors() {
+  const [messages, setMessages] = useState<string[]>([]);
+
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      setMessages((prev) => [...prev, `window.onerror: ${event.message}`]);
+    };
+    const onRejection = (event: PromiseRejectionEvent) => {
+      const reason =
+        event.reason instanceof Error ? event.reason.message : String(event.reason);
+      setMessages((prev) => [...prev, `unhandledrejection: ${reason}`]);
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
+  }, []);
+
+  return messages;
+}
+
 export default function Home() {
   const water = useSoundEngine(createWaterEngine, "水の流れる音");
   const waves = useSoundEngine(createWavesEngine, "穏やかな波の音");
   const rain = useSoundEngine(createRainEngine, "雨の音");
+  const globalErrors = useGlobalErrors();
 
   const anyPlaying = water.isPlaying || waves.isPlaying || rain.isPlaying;
 
@@ -24,6 +51,13 @@ export default function Home() {
   }, [water, waves, rain]);
 
   useMediaSession(anyPlaying, stopAll);
+
+  const diagnostics = [
+    water.error && `water: ${water.error}`,
+    waves.error && `waves: ${waves.error}`,
+    rain.error && `rain: ${rain.error}`,
+    ...globalErrors,
+  ].filter((m): m is string => Boolean(m));
 
   return (
     <main className="stage">
@@ -49,6 +83,9 @@ export default function Home() {
         onToggle={rain.toggle}
       />
       <DonateButton />
+      {diagnostics.length > 0 && (
+        <pre className="diagnostics">{diagnostics.join("\n")}</pre>
+      )}
     </main>
   );
 }

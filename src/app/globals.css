@@ -142,3 +142,23 @@ body {
   opacity: 0.9;
   color: #e0607a;
 }
+
+.diagnostics {
+  position: fixed;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: max(4rem, calc(env(safe-area-inset-bottom) + 3.5rem));
+  max-height: 40vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #ffb4b4;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.65rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  z-index: 20;
+}
