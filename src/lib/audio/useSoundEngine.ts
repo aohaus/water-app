@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { ensureAudio } from "./context";
+import { ensureAudio, isWorkletReady } from "./context";
 import type { EngineFactory, SoundEngine } from "./types";
 
 export function useSoundEngine(factory: EngineFactory, label: string) {
@@ -9,6 +9,7 @@ export function useSoundEngine(factory: EngineFactory, label: string) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState<string | null>(null);
 
   const toggle = useCallback(async () => {
     if (engineRef.current) {
@@ -25,6 +26,7 @@ export function useSoundEngine(factory: EngineFactory, label: string) {
       engine.start();
       engineRef.current = engine;
       setIsPlaying(true);
+      setDiagnostic(`${label}: ctx.state=${ctx.state} workletReady=${isWorkletReady()}`);
     } catch (err) {
       setError(`${label}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -32,5 +34,5 @@ export function useSoundEngine(factory: EngineFactory, label: string) {
     }
   }, [factory, label]);
 
-  return { isPlaying, isLoading, error, toggle, label };
+  return { isPlaying, isLoading, error, diagnostic, toggle, label };
 }

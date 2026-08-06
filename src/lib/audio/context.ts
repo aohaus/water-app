@@ -46,6 +46,10 @@ export async function ensureAudio(): Promise<AudioHandles> {
   return handles;
 }
 
+export function isWorkletReady(): boolean {
+  return workletReady;
+}
+
 export function createNoiseNode(ctx: AudioContext): AudioNode {
   if (workletReady && typeof AudioWorkletNode !== "undefined") {
     return new AudioWorkletNode(ctx, "white-noise-processor", {

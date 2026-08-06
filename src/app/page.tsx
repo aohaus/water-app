@@ -56,6 +56,9 @@ export default function Home() {
     water.error && `water: ${water.error}`,
     waves.error && `waves: ${waves.error}`,
     rain.error && `rain: ${rain.error}`,
+    water.diagnostic,
+    waves.diagnostic,
+    rain.diagnostic,
     ...globalErrors,
   ].filter((m): m is string => Boolean(m));
 
