@@ -7,29 +7,41 @@ interface AudioHandles {
 
 let handlesPromise: Promise<AudioHandles> | null = null;
 let workletReady = false;
-let htmlAudioUnlocked = false;
+let htmlAudioUnlockAttempted = false;
+let htmlAudioUnlockResult: "pending" | "ok" | "failed" = "pending";
 
-// A near-silent WAV, base64-encoded. Some in-app WebViews (World App's
-// included) keep their native audio session locked even after
-// AudioContext.resume() reports "running" — the JS-level state can say
-// running while nothing actually reaches the speaker. Playing a real
-// HTMLMediaElement synchronously inside the same tap is a well-known way
+// 0.1s of real silence (8-bit mono PCM), base64-encoded — not a
+// zero-length WAV, which some WebViews refuse to actually play (and a
+// play() that never truly starts doesn't unlock anything). Some in-app
+// WebViews (World App's included) keep their native audio session locked
+// even after AudioContext.resume() reports "running" — the JS-level state
+// can say running while nothing actually reaches the speaker. Playing a
+// real HTMLMediaElement synchronously inside the same tap is a known way
 // to unlock that session; call this before anything async happens.
 const SILENT_WAV =
-  "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+  "data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
 
 export function unlockHtmlAudio(): void {
-  if (htmlAudioUnlocked) return;
-  htmlAudioUnlocked = true;
+  if (htmlAudioUnlockAttempted) return;
+  htmlAudioUnlockAttempted = true;
   try {
     const audio = new Audio(SILENT_WAV);
     audio.volume = 0.01;
-    void audio.play().catch(() => {
-      // Best effort — if this fails we're no worse off than before.
-    });
+    audio
+      .play()
+      .then(() => {
+        htmlAudioUnlockResult = "ok";
+      })
+      .catch(() => {
+        htmlAudioUnlockResult = "failed";
+      });
   } catch {
-    // Ignore — Audio() itself can throw in some restricted contexts.
+    htmlAudioUnlockResult = "failed";
   }
+}
+
+export function getHtmlAudioUnlockResult(): string {
+  return htmlAudioUnlockResult;
 }
 
 async function init(): Promise<AudioHandles> {

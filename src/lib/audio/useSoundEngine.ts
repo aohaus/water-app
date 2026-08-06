@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { ensureAudio, isWorkletReady, unlockHtmlAudio } from "./context";
+import { ensureAudio, getHtmlAudioUnlockResult, isWorkletReady, unlockHtmlAudio } from "./context";
 import type { EngineFactory, SoundEngine } from "./types";
 
 export function useSoundEngine(factory: EngineFactory, label: string) {
@@ -29,7 +29,12 @@ export function useSoundEngine(factory: EngineFactory, label: string) {
       engine.start();
       engineRef.current = engine;
       setIsPlaying(true);
-      setDiagnostic(`${label}: ctx.state=${ctx.state} workletReady=${isWorkletReady()}`);
+      const report = () =>
+        setDiagnostic(
+          `${label}: ctx.state=${ctx.state} workletReady=${isWorkletReady()} htmlAudioUnlock=${getHtmlAudioUnlockResult()}`
+        );
+      report();
+      setTimeout(report, 400);
     } catch (err) {
       setError(`${label}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
