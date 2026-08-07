@@ -9,6 +9,7 @@ import { useMediaSession } from "@/lib/audio/useMediaSession";
 import { createWaterEngine } from "@/lib/audio/water";
 import { createWavesEngine } from "@/lib/audio/waves";
 import { createRainEngine } from "@/lib/audio/rain";
+import { ensureAudio, unlockHtmlAudio } from "@/lib/audio/context";
 
 // Temporary on-screen diagnostics: there is no remote console access while
 // debugging "no sound" reports from inside World App, so surface any error
@@ -34,6 +35,26 @@ function useGlobalErrors() {
   }, []);
 
   return messages;
+}
+
+// Temporary: a loud, unmistakable 440Hz tone to tell "audio pipeline
+// works but our ambient sounds are too quiet to notice" apart from
+// "no audio is reaching the speaker at all".
+async function playTestTone() {
+  unlockHtmlAudio();
+  const { ctx, master } = await ensureAudio();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.value = 440;
+  const now = ctx.currentTime;
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.3, now + 0.05);
+  gain.gain.setValueAtTime(0.3, now + 0.9);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
+  osc.connect(gain).connect(master);
+  osc.start(now);
+  osc.stop(now + 1.05);
 }
 
 export default function Home() {
@@ -86,6 +107,9 @@ export default function Home() {
         onToggle={rain.toggle}
       />
       <DonateButton />
+      <button type="button" className="debug-tone-button" onClick={playTestTone}>
+        🔊 テスト音(1秒・大音量)
+      </button>
       {diagnostics.length > 0 && (
         <pre className="diagnostics">{diagnostics.join("\n")}</pre>
       )}
