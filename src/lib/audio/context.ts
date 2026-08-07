@@ -44,8 +44,27 @@ export function getHtmlAudioUnlockResult(): string {
   return htmlAudioUnlockResult;
 }
 
+let currentCtx: AudioContext | null = null;
+const stateChangeLog: string[] = [];
+
+function logStateChange(message: string) {
+  const t = new Date().toISOString().slice(11, 23);
+  stateChangeLog.push(`${t} ${message}`);
+  if (stateChangeLog.length > 25) stateChangeLog.shift();
+}
+
+export function getStateChangeLog(): string[] {
+  return stateChangeLog;
+}
+
 async function init(): Promise<AudioHandles> {
   const ctx = new AudioContext();
+  currentCtx = ctx;
+  logStateChange(`context created, initial state=${ctx.state}`);
+  ctx.addEventListener("statechange", () => {
+    logStateChange(`statechange -> ${ctx.state}`);
+  });
+
   const master = ctx.createGain();
   master.gain.value = 0.9;
   master.connect(ctx.destination);
@@ -80,6 +99,21 @@ export async function ensureAudio(): Promise<AudioHandles> {
   const handles = await handlesPromise;
   if (handles.ctx.state === "suspended") await handles.ctx.resume();
   return handles;
+}
+
+// If the platform suspends the AudioContext behind our back (e.g. an OS
+// permission dialog stealing focus), try to bring it back the moment the
+// page is visible/focused again, instead of waiting for the next tap.
+if (typeof document !== "undefined") {
+  const tryResume = () => {
+    if (currentCtx && currentCtx.state === "suspended") {
+      logStateChange(`auto-resume attempt (visibility=${document.visibilityState})`);
+      void currentCtx.resume().catch(() => {});
+    }
+  };
+  document.addEventListener("visibilitychange", tryResume);
+  window.addEventListener("focus", tryResume);
+  window.addEventListener("pageshow", tryResume);
 }
 
 export function isWorkletReady(): boolean {

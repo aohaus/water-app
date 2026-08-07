@@ -9,7 +9,7 @@ import { useMediaSession } from "@/lib/audio/useMediaSession";
 import { createWaterEngine } from "@/lib/audio/water";
 import { createWavesEngine } from "@/lib/audio/waves";
 import { createRainEngine } from "@/lib/audio/rain";
-import { ensureAudio, unlockHtmlAudio } from "@/lib/audio/context";
+import { ensureAudio, getStateChangeLog, unlockHtmlAudio } from "@/lib/audio/context";
 
 // Temporary on-screen diagnostics: there is no remote console access while
 // debugging "no sound" reports from inside World App, so surface any error
@@ -40,7 +40,7 @@ function useGlobalErrors() {
 // Temporary: a loud, unmistakable 440Hz tone to tell "audio pipeline
 // works but our ambient sounds are too quiet to notice" apart from
 // "no audio is reaching the speaker at all".
-async function playTestTone() {
+async function playTestTone(report: (msg: string) => void) {
   unlockHtmlAudio();
   const { ctx, master } = await ensureAudio();
   const osc = ctx.createOscillator();
@@ -55,6 +55,10 @@ async function playTestTone() {
   osc.connect(gain).connect(master);
   osc.start(now);
   osc.stop(now + 1.05);
+  const send = () => report(`test tone: ctx.state=${ctx.state}\n${getStateChangeLog().join("\n")}`);
+  send();
+  setTimeout(send, 400);
+  setTimeout(send, 1500);
 }
 
 export default function Home() {
@@ -62,6 +66,7 @@ export default function Home() {
   const waves = useSoundEngine(createWavesEngine, "穏やかな波の音");
   const rain = useSoundEngine(createRainEngine, "雨の音");
   const globalErrors = useGlobalErrors();
+  const [toneDiagnostic, setToneDiagnostic] = useState<string | null>(null);
 
   const anyPlaying = water.isPlaying || waves.isPlaying || rain.isPlaying;
 
@@ -80,6 +85,7 @@ export default function Home() {
     water.diagnostic,
     waves.diagnostic,
     rain.diagnostic,
+    toneDiagnostic,
     ...globalErrors,
   ].filter((m): m is string => Boolean(m));
 
@@ -107,7 +113,11 @@ export default function Home() {
         onToggle={rain.toggle}
       />
       <DonateButton />
-      <button type="button" className="debug-tone-button" onClick={playTestTone}>
+      <button
+        type="button"
+        className="debug-tone-button"
+        onClick={() => void playTestTone(setToneDiagnostic)}
+      >
         🔊 テスト音(1秒・大音量)
       </button>
       {diagnostics.length > 0 && (
