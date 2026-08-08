@@ -7,42 +7,6 @@ interface AudioHandles {
 
 let handlesPromise: Promise<AudioHandles> | null = null;
 let workletReady = false;
-let htmlAudioUnlockAttempted = false;
-let htmlAudioUnlockResult: "pending" | "ok" | "failed" = "pending";
-
-// 0.1s of real silence (8-bit mono PCM), base64-encoded — not a
-// zero-length WAV, which some WebViews refuse to actually play (and a
-// play() that never truly starts doesn't unlock anything). Some in-app
-// WebViews (World App's included) keep their native audio session locked
-// even after AudioContext.resume() reports "running" — the JS-level state
-// can say running while nothing actually reaches the speaker. Playing a
-// real HTMLMediaElement synchronously inside the same tap is a known way
-// to unlock that session; call this before anything async happens.
-const SILENT_WAV =
-  "data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
-
-export function unlockHtmlAudio(): void {
-  if (htmlAudioUnlockAttempted) return;
-  htmlAudioUnlockAttempted = true;
-  try {
-    const audio = new Audio(SILENT_WAV);
-    audio.volume = 0.01;
-    audio
-      .play()
-      .then(() => {
-        htmlAudioUnlockResult = "ok";
-      })
-      .catch(() => {
-        htmlAudioUnlockResult = "failed";
-      });
-  } catch {
-    htmlAudioUnlockResult = "failed";
-  }
-}
-
-export function getHtmlAudioUnlockResult(): string {
-  return htmlAudioUnlockResult;
-}
 
 let currentCtx: AudioContext | null = null;
 const stateChangeLog: string[] = [];

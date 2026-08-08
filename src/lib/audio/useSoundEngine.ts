@@ -1,13 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import {
-  ensureAudio,
-  getHtmlAudioUnlockResult,
-  getStateChangeLog,
-  isWorkletReady,
-  unlockHtmlAudio,
-} from "./context";
+import { ensureAudio, getStateChangeLog, isWorkletReady } from "./context";
 import type { EngineFactory, SoundEngine } from "./types";
 
 export function useSoundEngine(factory: EngineFactory, label: string) {
@@ -18,9 +12,6 @@ export function useSoundEngine(factory: EngineFactory, label: string) {
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
 
   const toggle = useCallback(async () => {
-    // Must happen synchronously, before any await, to stay tied to the tap.
-    unlockHtmlAudio();
-
     if (engineRef.current) {
       engineRef.current.stop();
       engineRef.current = null;
@@ -37,7 +28,7 @@ export function useSoundEngine(factory: EngineFactory, label: string) {
       setIsPlaying(true);
       const report = () =>
         setDiagnostic(
-          `${label}: ctx.state=${ctx.state} workletReady=${isWorkletReady()} htmlAudioUnlock=${getHtmlAudioUnlockResult()}\n${getStateChangeLog().join("\n")}`
+          `${label}: ctx.state=${ctx.state} workletReady=${isWorkletReady()}\n${getStateChangeLog().join("\n")}`
         );
       report();
       setTimeout(report, 400);

@@ -9,7 +9,7 @@ import { useMediaSession } from "@/lib/audio/useMediaSession";
 import { createWaterEngine } from "@/lib/audio/water";
 import { createWavesEngine } from "@/lib/audio/waves";
 import { createRainEngine } from "@/lib/audio/rain";
-import { ensureAudio, getStateChangeLog, unlockHtmlAudio } from "@/lib/audio/context";
+import { ensureAudio, getStateChangeLog } from "@/lib/audio/context";
 
 // Temporary on-screen diagnostics: there is no remote console access while
 // debugging "no sound" reports from inside World App, so surface any error
@@ -41,7 +41,6 @@ function useGlobalErrors() {
 // works but our ambient sounds are too quiet to notice" apart from
 // "no audio is reaching the speaker at all".
 async function playTestTone(report: (msg: string) => void) {
-  unlockHtmlAudio();
   const { ctx, master } = await ensureAudio();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
