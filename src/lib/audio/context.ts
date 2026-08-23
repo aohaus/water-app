@@ -9,9 +9,27 @@ let handlesPromise: Promise<AudioHandles> | null = null;
 let workletReady = false;
 let currentCtx: AudioContext | null = null;
 
+// iOS WebKit (Safari and, since it's WebKit-based too, Chrome on iOS) can
+// report an AudioContext as "running" while nothing actually reaches the
+// speaker unless a real Web Audio source node is started synchronously
+// within the same tap. AudioWorkletNode/ScriptProcessorNode alone don't
+// count for this unlock — a classic silent one-sample buffer source does.
+function unlockWebAudio(ctx: AudioContext) {
+  try {
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+  } catch {
+    // Best effort.
+  }
+}
+
 async function init(): Promise<AudioHandles> {
   const ctx = new AudioContext();
   currentCtx = ctx;
+  unlockWebAudio(ctx);
 
   const master = ctx.createGain();
   master.gain.value = 0.9;
@@ -45,6 +63,9 @@ async function init(): Promise<AudioHandles> {
 export async function ensureAudio(): Promise<AudioHandles> {
   if (!handlesPromise) handlesPromise = init();
   const handles = await handlesPromise;
+  // Re-unlock on every gesture, not just the first — cheap, and iOS has
+  // been known to need it again after the context sits idle.
+  unlockWebAudio(handles.ctx);
   if (handles.ctx.state === "suspended") await handles.ctx.resume();
   return handles;
 }
