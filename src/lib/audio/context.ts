@@ -43,10 +43,34 @@ function unlockWebAudio(ctx: AudioContext) {
   }
 }
 
+// Confirmed by on-device diagnostics: on iOS WebKit, a Web Audio graph on
+// its own can generate correct sample data (verified via AnalyserNode) yet
+// never reach the speaker — WebKit is putting the page's audio session in a
+// category it's free to keep silent. Playing a real (inaudible but validly
+// decodable) HTMLMediaElement clip, and keeping it looping for the life of
+// the page, moves the session into a category where Web Audio output is
+// also audible. Must be started synchronously within the tap, same as
+// unlockWebAudio above.
+let sessionUnlockEl: HTMLAudioElement | null = null;
+
+function unlockAudioSession() {
+  if (typeof Audio === "undefined") return;
+  try {
+    if (!sessionUnlockEl) {
+      sessionUnlockEl = new Audio("/audio/silent.wav");
+      sessionUnlockEl.loop = true;
+    }
+    void sessionUnlockEl.play().catch(() => {});
+  } catch {
+    // Best effort.
+  }
+}
+
 async function init(): Promise<AudioHandles> {
   const ctx = new AudioContext();
   currentCtx = ctx;
   unlockWebAudio(ctx);
+  unlockAudioSession();
 
   const master = ctx.createGain();
   master.gain.value = 0.9;
@@ -83,6 +107,9 @@ async function init(): Promise<AudioHandles> {
 // Must be called from a user gesture (tap) so the browser allows the
 // AudioContext to start and, on iOS, to keep running once the tab backgrounds.
 export async function ensureAudio(): Promise<AudioHandles> {
+  // Fire both unlocks synchronously, before any await, so they stay inside
+  // the tap gesture even on repeat calls.
+  unlockAudioSession();
   if (!handlesPromise) handlesPromise = init();
   const handles = await handlesPromise;
   // Re-unlock on every gesture, not just the first — cheap, and iOS has
@@ -99,6 +126,9 @@ if (typeof document !== "undefined") {
   const tryResume = () => {
     if (currentCtx && currentCtx.state === "suspended") {
       void currentCtx.resume().catch(() => {});
+    }
+    if (sessionUnlockEl && sessionUnlockEl.paused) {
+      void sessionUnlockEl.play().catch(() => {});
     }
   };
   document.addEventListener("visibilitychange", tryResume);
