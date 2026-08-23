@@ -9,6 +9,23 @@ let handlesPromise: Promise<AudioHandles> | null = null;
 let workletReady = false;
 let currentCtx: AudioContext | null = null;
 
+// iOS WebKit (Safari, and Chrome on iOS since Apple requires it to use
+// WebKit too) has a known issue where an output-only AudioWorkletNode
+// (numberOfInputs: 0) loads without error and reports the context as
+// running, yet never actually reaches the speaker. Confirmed by testing:
+// works on Windows Chrome and Android Chrome, silent on iPhone Safari and
+// Chrome — i.e. it tracks the rendering engine (WebKit), not the browser.
+// ScriptProcessorNode predates AudioWorklet by years and has always been
+// reliable on iOS, so skip AudioWorklet there entirely rather than trust
+// its (apparently unreliable, on this platform) success signal.
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  const isAppleTouch = /iPad|iPhone|iPod/.test(ua);
+  const isIPadOSDesktopUA = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return isAppleTouch || isIPadOSDesktopUA;
+}
+
 // iOS WebKit (Safari and, since it's WebKit-based too, Chrome on iOS) can
 // report an AudioContext as "running" while nothing actually reaches the
 // speaker unless a real Web Audio source node is started synchronously
@@ -46,13 +63,18 @@ async function init(): Promise<AudioHandles> {
     }
   }
 
-  try {
-    await ctx.audioWorklet.addModule("/worklets/white-noise-processor.js");
-    workletReady = true;
-  } catch {
-    // AudioWorklet isn't available in every WebView. We fall back to
-    // ScriptProcessorNode in createNoiseNode below.
+  if (isIOS()) {
+    // Skip AudioWorklet on iOS entirely — see note above.
     workletReady = false;
+  } else {
+    try {
+      await ctx.audioWorklet.addModule("/worklets/white-noise-processor.js");
+      workletReady = true;
+    } catch {
+      // AudioWorklet isn't available in every WebView. We fall back to
+      // ScriptProcessorNode in createNoiseNode below.
+      workletReady = false;
+    }
   }
 
   return { ctx, master };
