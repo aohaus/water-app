@@ -7,27 +7,11 @@ interface AudioHandles {
 
 let handlesPromise: Promise<AudioHandles> | null = null;
 let workletReady = false;
-
 let currentCtx: AudioContext | null = null;
-const stateChangeLog: string[] = [];
-
-function logStateChange(message: string) {
-  const t = new Date().toISOString().slice(11, 23);
-  stateChangeLog.push(`${t} ${message}`);
-  if (stateChangeLog.length > 25) stateChangeLog.shift();
-}
-
-export function getStateChangeLog(): string[] {
-  return stateChangeLog;
-}
 
 async function init(): Promise<AudioHandles> {
   const ctx = new AudioContext();
   currentCtx = ctx;
-  logStateChange(`context created, initial state=${ctx.state}`);
-  ctx.addEventListener("statechange", () => {
-    logStateChange(`statechange -> ${ctx.state}`);
-  });
 
   const master = ctx.createGain();
   master.gain.value = 0.9;
@@ -71,17 +55,12 @@ export async function ensureAudio(): Promise<AudioHandles> {
 if (typeof document !== "undefined") {
   const tryResume = () => {
     if (currentCtx && currentCtx.state === "suspended") {
-      logStateChange(`auto-resume attempt (visibility=${document.visibilityState})`);
       void currentCtx.resume().catch(() => {});
     }
   };
   document.addEventListener("visibilitychange", tryResume);
   window.addEventListener("focus", tryResume);
   window.addEventListener("pageshow", tryResume);
-}
-
-export function isWorkletReady(): boolean {
-  return workletReady;
 }
 
 export function createNoiseNode(ctx: AudioContext): AudioNode {
