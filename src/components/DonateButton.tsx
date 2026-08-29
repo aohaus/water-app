@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { MiniKit } from "@worldcoin/minikit-js";
-import { Tokens } from "@worldcoin/minikit-js/commands";
+import { Tokens, tokenToDecimals } from "@worldcoin/minikit-js/commands";
 import { useMiniKit } from "@worldcoin/minikit-js/minikit-provider";
 import { HeartIcon } from "./icons";
 
@@ -25,7 +25,7 @@ export function DonateButton() {
       await MiniKit.pay({
         reference: crypto.randomUUID(),
         to: DONATE_ADDRESS as `0x${string}`,
-        tokens: [{ symbol: Tokens.WLD, token_amount: "1" }],
+        tokens: [{ symbol: Tokens.WLD, token_amount: tokenToDecimals(1, Tokens.WLD).toString() }],
         description: "Water — thank you",
       });
       setStatus("sent");
