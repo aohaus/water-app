@@ -106,6 +106,38 @@ body {
   -webkit-user-drag: none;
 }
 
+/* Sits exactly where the canvas drop comes to rest, so the drawn drop
+   hands over to this one without appearing to move. */
+.channel-mark {
+  position: fixed;
+  left: 22px;
+  bottom: 22px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  background: radial-gradient(circle at 35% 30%, #ffffff 0%, var(--pipe-flow) 22%, var(--pipe-on) 100%);
+  animation: mark-breathe 7s ease-in-out infinite;
+  transition: transform 0.2s ease;
+  z-index: 3;
+}
+
+.channel-mark:active {
+  transform: scale(0.88);
+}
+
+@keyframes mark-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .stage--revealed {
     animation-duration: 0.3s;
@@ -113,6 +145,11 @@ body {
 
   .channel-stage {
     transition-duration: 0.3s;
+  }
+
+  .channel-mark {
+    animation: none;
+    opacity: 0.65;
   }
 }
 

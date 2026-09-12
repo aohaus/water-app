@@ -359,7 +359,9 @@ export function WaterChannel({ onComplete }: { onComplete: () => void }) {
         const ease = settle * settle * (3 - 2 * settle);
         const x = mark.x + (mark.homeX - mark.x) * ease;
         const y = mark.y + (mark.homeY - mark.y) * ease;
-        const scale = markProgress < 0.35 ? breathe : 1 - ease * 0.55;
+        // Lands at r=12 to match the resting mark the relax screen puts in
+        // the same corner, so the handover between them is invisible.
+        const scale = markProgress < 0.35 ? breathe : 1 - ease * 0.4;
         const r = 20 * scale;
         const grad = ctx!.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
         grad.addColorStop(0, "#ffffff");

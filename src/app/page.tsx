@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SoundButton } from "@/components/SoundButton";
 import { DonateButton } from "@/components/DonateButton";
 import { WaterChannel } from "@/components/WaterChannel";
+import { ChannelMark } from "@/components/ChannelMark";
 import { DropIcon, WaveIcon, RainIcon } from "@/components/icons";
 import { useSoundEngine } from "@/lib/audio/useSoundEngine";
 import { useMediaSession } from "@/lib/audio/useMediaSession";
@@ -26,10 +27,13 @@ export default function Home() {
   // the channel or the sounds are on screen immediately. Identity resolves
   // behind that, and only feeds the record of the day.
   const [stage, setStage] = useState<Stage>("relax");
+  const [played, setPlayed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const identityRef = useRef<Identity | null>(null);
 
   useEffect(() => {
-    if (!hasPlayedToday()) setStage("channel");
+    if (hasPlayedToday()) setPlayed(true);
+    else setStage("channel");
     let cancelled = false;
     void (async () => {
       const identity = await resolveIdentity();
@@ -43,9 +47,18 @@ export default function Home() {
   const handleChannelComplete = useCallback(() => {
     // Always record the day, even if identity never resolved — otherwise a
     // declined sheet would hand back the same puzzle on the next open.
+    // Re-runs land here too and simply rewrite the same day.
     markPlayedToday(identityRef.current);
+    setPlayed(true);
     setStage("settling");
     window.setTimeout(() => setStage("relax"), 1300);
+  }, []);
+
+  // Same board, from the top. The day is already recorded, so this is
+  // purely for the pleasure of running the water through again.
+  const handleRetry = useCallback(() => {
+    setAttempt((n) => n + 1);
+    setStage("channel");
   }, []);
 
   const anyPlaying = water.isPlaying || waves.isPlaying || rain.isPlaying;
@@ -88,9 +101,10 @@ export default function Home() {
           <DonateButton />
         </main>
       )}
+      {played && stage !== "channel" && <ChannelMark onRetry={handleRetry} />}
       {(stage === "channel" || stage === "settling") && (
         <div className={`channel-stage${stage === "settling" ? " channel-stage--out" : ""}`}>
-          <WaterChannel onComplete={handleChannelComplete} />
+          <WaterChannel key={attempt} onComplete={handleChannelComplete} />
         </div>
       )}
     </>
