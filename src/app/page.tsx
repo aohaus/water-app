@@ -1,19 +1,48 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SoundButton } from "@/components/SoundButton";
 import { DonateButton } from "@/components/DonateButton";
+import { WaterChannel } from "@/components/WaterChannel";
 import { DropIcon, WaveIcon, RainIcon } from "@/components/icons";
 import { useSoundEngine } from "@/lib/audio/useSoundEngine";
 import { useMediaSession } from "@/lib/audio/useMediaSession";
 import { createWaterEngine } from "@/lib/audio/water";
 import { createWavesEngine } from "@/lib/audio/waves";
 import { createRainEngine } from "@/lib/audio/rain";
+import { hasPlayedToday, markPlayedToday, resolveIdentity, type Identity } from "@/lib/puzzle/gate";
+
+// The day's channel opens the app once, then dissolves into the sounds.
+// "settling" keeps it mounted while it fades, so the two cross-fade
+// instead of cutting.
+type Stage = "checking" | "channel" | "settling" | "relax";
 
 export default function Home() {
   const water = useSoundEngine(createWaterEngine, "水の流れる音");
   const waves = useSoundEngine(createWavesEngine, "穏やかな波の音");
   const rain = useSoundEngine(createRainEngine, "雨の音");
+
+  const [stage, setStage] = useState<Stage>("checking");
+  const identityRef = useRef<Identity | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const identity = await resolveIdentity();
+      if (cancelled) return;
+      identityRef.current = identity;
+      setStage(hasPlayedToday(identity) ? "relax" : "channel");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleChannelComplete = useCallback(() => {
+    if (identityRef.current) markPlayedToday(identityRef.current);
+    setStage("settling");
+    window.setTimeout(() => setStage("relax"), 1300);
+  }, []);
 
   const anyPlaying = water.isPlaying || waves.isPlaying || rain.isPlaying;
 
@@ -25,30 +54,41 @@ export default function Home() {
 
   useMediaSession(anyPlaying, stopAll);
 
+  const showSounds = stage === "settling" || stage === "relax";
+
   return (
-    <main className="stage">
-      <SoundButton
-        icon={DropIcon}
-        label="水の流れる音"
-        isPlaying={water.isPlaying}
-        isLoading={water.isLoading}
-        onToggle={water.toggle}
-      />
-      <SoundButton
-        icon={WaveIcon}
-        label="穏やかな波の音"
-        isPlaying={waves.isPlaying}
-        isLoading={waves.isLoading}
-        onToggle={waves.toggle}
-      />
-      <SoundButton
-        icon={RainIcon}
-        label="雨の音"
-        isPlaying={rain.isPlaying}
-        isLoading={rain.isLoading}
-        onToggle={rain.toggle}
-      />
-      <DonateButton />
-    </main>
+    <>
+      {showSounds && (
+        <main className={`stage${stage === "settling" ? " stage--revealed" : ""}`}>
+          <SoundButton
+            icon={DropIcon}
+            label="水の流れる音"
+            isPlaying={water.isPlaying}
+            isLoading={water.isLoading}
+            onToggle={water.toggle}
+          />
+          <SoundButton
+            icon={WaveIcon}
+            label="穏やかな波の音"
+            isPlaying={waves.isPlaying}
+            isLoading={waves.isLoading}
+            onToggle={waves.toggle}
+          />
+          <SoundButton
+            icon={RainIcon}
+            label="雨の音"
+            isPlaying={rain.isPlaying}
+            isLoading={rain.isLoading}
+            onToggle={rain.toggle}
+          />
+          <DonateButton />
+        </main>
+      )}
+      {(stage === "channel" || stage === "settling") && (
+        <div className={`channel-stage${stage === "settling" ? " channel-stage--out" : ""}`}>
+          <WaterChannel onComplete={handleChannelComplete} />
+        </div>
+      )}
+    </>
   );
 }

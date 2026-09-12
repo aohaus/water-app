@@ -5,6 +5,12 @@
   --surface: rgba(255, 255, 255, 0.55);
   --surface-active: rgba(70, 130, 160, 0.85);
   --ring: rgba(70, 130, 160, 0.35);
+  --pipe-off: rgba(70, 130, 160, 0.22);
+  --pipe-on: rgba(45, 110, 145, 0.9);
+  --pipe-flow: #2f9fd6;
+  --mark: rgba(70, 130, 160, 0.55);
+  --channel-top: #eef4f7;
+  --channel-bottom: #d7e6ee;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -15,6 +21,14 @@
     --surface: rgba(255, 255, 255, 0.06);
     --surface-active: rgba(120, 180, 210, 0.35);
     --ring: rgba(120, 180, 210, 0.45);
+    --pipe-off: rgba(120, 180, 210, 0.22);
+    --pipe-on: rgba(140, 200, 225, 0.9);
+    --pipe-flow: #5cc3ea;
+    --mark: rgba(120, 180, 210, 0.6);
+    /* The puzzle sits in deeper water than the relax screen, so the pipes
+       read as pipes rather than shapes floating on near-black. */
+    --channel-top: #123240;
+    --channel-bottom: #081b24;
     color-scheme: dark;
   }
 }
@@ -23,6 +37,9 @@
   box-sizing: border-box;
   padding: 0;
   margin: 0;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 html,
@@ -51,6 +68,52 @@ body {
   justify-content: center;
   gap: clamp(1rem, 6vw, 2.5rem);
   padding: 1.5rem;
+}
+
+.stage--revealed {
+  animation: surface 1.4s ease forwards;
+}
+
+@keyframes surface {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.channel-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  background: radial-gradient(ellipse at 50% 20%, var(--channel-top), var(--channel-bottom));
+  transition: opacity 1.2s ease;
+}
+
+.channel-stage--out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.channel {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  -webkit-user-drag: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage--revealed {
+    animation-duration: 0.3s;
+  }
+
+  .channel-stage {
+    transition-duration: 0.3s;
+  }
 }
 
 .sound-button {
