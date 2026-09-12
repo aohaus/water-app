@@ -1,24 +1,72 @@
 "use client";
 
-import { ensureAudio } from "@/lib/audio/context";
+import { createNoiseNode, ensureAudio } from "@/lib/audio/context";
 
 // Routed through the app's shared AudioContext so the puzzle's sounds
 // inherit the same iOS audio-session unlock the ambient engines rely on.
 
-export async function playTick(): Promise<void> {
+/**
+ * Turning a piece sounds like handling water, not clicking a control: a
+ * scrap of contact noise, then the rising bubble tone a real drip makes.
+ * A piece that lands in its right orientation rings brighter and climbs
+ * further — the only "correct" feedback the app gives, and it needs no
+ * words. Every value is jittered so no two taps are the same sound.
+ */
+export async function playTap(landed: boolean): Promise<void> {
   try {
     const { ctx, master } = await ensureAudio();
+    const now = ctx.currentTime;
+
+    // Contact: a couple of milliseconds of filtered noise.
+    const impulse = createNoiseNode(ctx);
+    const gate = ctx.createGain();
+    gate.gain.setValueAtTime(0, now);
+    gate.gain.linearRampToValueAtTime(1, now + 0.002);
+    gate.gain.linearRampToValueAtTime(0, now + 0.016);
+
+    const contact = ctx.createBiquadFilter();
+    contact.type = "bandpass";
+    contact.frequency.value = 1400 + Math.random() * 900;
+    contact.Q.value = 6 + Math.random() * 5;
+
+    const contactGain = ctx.createGain();
+    contactGain.gain.value = landed ? 0.05 : 0.035;
+
+    impulse.connect(gate).connect(contact).connect(contactGain).connect(master);
+
+    // Bubble: the pitch of a drip rises as the entrained bubble shrinks.
+    const base = 330 + Math.random() * 90;
+    const climb = landed ? 1.5 + Math.random() * 0.18 : 1.1 + Math.random() * 0.08;
+    const decay = landed ? 0.28 + Math.random() * 0.08 : 0.19 + Math.random() * 0.06;
+
     const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
     osc.type = "sine";
-    osc.frequency.setValueAtTime(500, ctx.currentTime);
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.06, ctx.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.09);
-    osc.connect(gain);
-    gain.connect(master);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.1);
+    osc.frequency.setValueAtTime(base, now);
+    osc.frequency.exponentialRampToValueAtTime(base * climb, now + 0.07);
+
+    const body = ctx.createBiquadFilter();
+    body.type = "lowpass";
+    body.frequency.value = 2200;
+
+    const oscGain = ctx.createGain();
+    const peak = landed ? 0.085 : 0.055;
+    oscGain.gain.setValueAtTime(0.0001, now);
+    oscGain.gain.exponentialRampToValueAtTime(peak, now + 0.012);
+    oscGain.gain.exponentialRampToValueAtTime(0.0001, now + decay);
+
+    osc.connect(body).connect(oscGain).connect(master);
+    osc.start(now);
+    osc.stop(now + decay + 0.05);
+
+    window.setTimeout(() => {
+      [impulse, gate, contact, contactGain, osc, body, oscGain].forEach((n) => {
+        try {
+          n.disconnect();
+        } catch {
+          // Already torn down.
+        }
+      });
+    }, 700);
   } catch {
     // Sound is a garnish here; never let it break the puzzle.
   }

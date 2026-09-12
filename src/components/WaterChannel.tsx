@@ -14,7 +14,7 @@ import {
   type Cell,
   type Puzzle,
 } from "@/lib/puzzle/generate";
-import { playCelebration, playTick } from "@/lib/puzzle/sfx";
+import { playCelebration, playTap } from "@/lib/puzzle/sfx";
 
 const CELEBRATE_MS = 1700;
 
@@ -94,7 +94,7 @@ export function WaterChannel({ onComplete }: { onComplete: () => void }) {
         y: gridTop + cy * cell + cell / 2,
         t0: performance.now(),
       });
-      void playTick();
+      void playTap(cellSolved(c));
       if (isSolved(puzzle)) {
         phase = "flowing";
         flowStart = performance.now();
