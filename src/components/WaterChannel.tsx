@@ -361,9 +361,13 @@ export function WaterChannel({
 
         // The ground breathes with the water: it deepens as the channel
         // fills and lifts as it drains, so the rhythm is on the whole
-        // screen rather than only in the pipes.
+        // screen rather than only in the pipes. While the puzzle is still
+        // being solved there is no water to follow, so it breathes on its
+        // own — slower and shallower, enough that the screen is alive from
+        // the first moment and the rhythm is already there to be joined.
         const held = Math.max(0, Math.min(1, (headPos - tailPos) / len));
-        paintGround(reducedMotion ? 0.35 : held);
+        const idle = 0.16 + 0.16 * (0.5 - Math.cos((now / 1000) * ((Math.PI * 2) / 11)) / 2);
+        paintGround(reducedMotion ? 0.3 : phase === "playing" ? idle : held);
 
         // Ripples sit under the pipes, so a piece reads as resting on the
         // water it carries.
