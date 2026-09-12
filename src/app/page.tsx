@@ -15,23 +15,25 @@ import { hasPlayedToday, markPlayedToday, resolveIdentity, type Identity } from 
 // The day's channel opens the app once, then dissolves into the sounds.
 // "settling" keeps it mounted while it fades, so the two cross-fade
 // instead of cutting.
-type Stage = "checking" | "channel" | "settling" | "relax";
+type Stage = "channel" | "settling" | "relax";
 
 export default function Home() {
   const water = useSoundEngine(createWaterEngine, "水の流れる音");
   const waves = useSoundEngine(createWavesEngine, "穏やかな波の音");
   const rain = useSoundEngine(createRainEngine, "雨の音");
 
-  const [stage, setStage] = useState<Stage>("checking");
+  // Decided from local storage alone, so the first frame is never a wait:
+  // the channel or the sounds are on screen immediately. Identity resolves
+  // behind that, and only feeds the record of the day.
+  const [stage, setStage] = useState<Stage>("relax");
   const identityRef = useRef<Identity | null>(null);
 
   useEffect(() => {
+    if (!hasPlayedToday()) setStage("channel");
     let cancelled = false;
     void (async () => {
       const identity = await resolveIdentity();
-      if (cancelled) return;
-      identityRef.current = identity;
-      setStage(hasPlayedToday(identity) ? "relax" : "channel");
+      if (!cancelled) identityRef.current = identity;
     })();
     return () => {
       cancelled = true;
@@ -39,7 +41,9 @@ export default function Home() {
   }, []);
 
   const handleChannelComplete = useCallback(() => {
-    if (identityRef.current) markPlayedToday(identityRef.current);
+    // Always record the day, even if identity never resolved — otherwise a
+    // declined sheet would hand back the same puzzle on the next open.
+    markPlayedToday(identityRef.current);
     setStage("settling");
     window.setTimeout(() => setStage("relax"), 1300);
   }, []);

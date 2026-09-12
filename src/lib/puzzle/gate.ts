@@ -22,7 +22,12 @@ export type Identity = {
   inWorldApp: boolean;
 };
 
-const LOCAL_IDENTITY: Identity = { key: "local", orbVerified: false, inWorldApp: false };
+const LOCAL_KEY = "local";
+const LOCAL_IDENTITY: Identity = { key: LOCAL_KEY, orbVerified: false, inWorldApp: false };
+
+// Never let an unanswered sheet strand the app: if World App doesn't come
+// back, we carry on as an anonymous local player.
+const AUTH_TIMEOUT_MS = 8000;
 
 function makeNonce(): string {
   try {
@@ -36,11 +41,15 @@ export async function resolveIdentity(): Promise<Identity> {
   if (typeof window === "undefined") return LOCAL_IDENTITY;
   try {
     if (!isInWorldApp()) return LOCAL_IDENTITY;
-    const result = await MiniKit.walletAuth({
+    const auth = MiniKit.walletAuth({
       nonce: makeNonce(),
       statement: "今日の水路をひらく",
     });
-    const address = result.data?.address;
+    const timeout = new Promise<null>((resolve) => {
+      window.setTimeout(() => resolve(null), AUTH_TIMEOUT_MS);
+    });
+    const result = await Promise.race([auth, timeout]);
+    const address = result?.data?.address;
     if (!address) return LOCAL_IDENTITY;
     return {
       key: address.toLowerCase(),
@@ -53,21 +62,36 @@ export async function resolveIdentity(): Promise<Identity> {
   }
 }
 
-function storageKey(identity: Identity): string {
-  return `water-channel:${identity.key}`;
+function storageKey(key: string): string {
+  return `water-channel:${key}`;
 }
 
-export function hasPlayedToday(identity: Identity): boolean {
+function readDay(key: string): string | null {
   try {
-    return localStorage.getItem(storageKey(identity)) === dayKey();
+    return localStorage.getItem(storageKey(key));
   } catch {
-    return false;
+    return null;
   }
 }
 
-export function markPlayedToday(identity: Identity): void {
+/**
+ * The local key answers instantly at launch, so the app never waits on a
+ * sheet to decide what to show. A wallet key is written alongside it so a
+ * shared device still gives each person their own run.
+ */
+export function hasPlayedToday(identity?: Identity | null): boolean {
+  const today = dayKey();
+  if (readDay(LOCAL_KEY) === today) return true;
+  return identity ? readDay(identity.key) === today : false;
+}
+
+export function markPlayedToday(identity?: Identity | null): void {
+  const today = dayKey();
   try {
-    localStorage.setItem(storageKey(identity), dayKey());
+    localStorage.setItem(storageKey(LOCAL_KEY), today);
+    if (identity && identity.key !== LOCAL_KEY) {
+      localStorage.setItem(storageKey(identity.key), today);
+    }
   } catch {
     // Private mode and friends: the day simply won't be remembered.
   }
