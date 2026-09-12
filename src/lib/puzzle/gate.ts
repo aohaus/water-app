@@ -85,13 +85,30 @@ export function hasPlayedToday(identity?: Identity | null): boolean {
   return identity ? readDay(identity.key) === today : false;
 }
 
+const DAYS_KEY = "water-channel:days";
+
+/** How many days this person has opened the channel — the breath grows with it. */
+export function daysCompleted(): number {
+  try {
+    const raw = localStorage.getItem(DAYS_KEY);
+    const n = raw ? Number.parseInt(raw, 10) : 0;
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function markPlayedToday(identity?: Identity | null): void {
   const today = dayKey();
+  // Only a day's first run counts. Running it again is for the pleasure of
+  // it and must not inflate the streak the breath is paced from.
+  const firstRunToday = !hasPlayedToday(identity);
   try {
     localStorage.setItem(storageKey(LOCAL_KEY), today);
     if (identity && identity.key !== LOCAL_KEY) {
       localStorage.setItem(storageKey(identity.key), today);
     }
+    if (firstRunToday) localStorage.setItem(DAYS_KEY, String(daysCompleted() + 1));
   } catch {
     // Private mode and friends: the day simply won't be remembered.
   }

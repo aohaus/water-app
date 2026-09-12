@@ -15,18 +15,27 @@ import {
   type Puzzle,
 } from "@/lib/puzzle/generate";
 import { playCelebration, playTap } from "@/lib/puzzle/sfx";
+import { BREATH_STEPS, breathTiming, stepDuration, stepIsInhale } from "@/lib/puzzle/breath";
 
 const CELEBRATE_MS = 1700;
 
-type Phase = "playing" | "flowing" | "done";
+type Phase = "playing" | "breathing" | "done";
 type Ripple = { x: number; y: number; t0: number };
 type Sparkle = { x: number; y: number; delay: number; dur: number; size: number };
 type Mark = { x: number; y: number; homeX: number; homeY: number };
 
-export function WaterChannel({ onComplete }: { onComplete: () => void }) {
+export function WaterChannel({
+  onComplete,
+  daysCompleted = 0,
+}: {
+  onComplete: () => void;
+  daysCompleted?: number;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
+  const daysRef = useRef(daysCompleted);
+  daysRef.current = daysCompleted;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -35,9 +44,10 @@ export function WaterChannel({ onComplete }: { onComplete: () => void }) {
     if (!ctx) return;
 
     const puzzle: Puzzle = buildPuzzle();
+    const timing = breathTiming(daysRef.current);
     let phase: Phase = "playing";
-    let flowStart = 0;
-    let flowProgress = 0;
+    let breathStep = 0;
+    let stepStart = 0;
     let celebrating = false;
     let celebrateStart = 0;
     let sparkles: Sparkle[] = [];
@@ -81,6 +91,12 @@ export function WaterChannel({ onComplete }: { onComplete: () => void }) {
     // --- interaction -----------------------------------------------------
     function handlePointerDown(event: PointerEvent) {
       event.preventDefault();
+      // Some days you just want the sounds: a touch anywhere leaves the
+      // breathing early rather than holding you there.
+      if (phase === "breathing" && !celebrating) {
+        breathStep = BREATH_STEPS;
+        return;
+      }
       if (phase !== "playing") return;
       const cx = Math.floor((event.clientX - gridLeft) / cell);
       const cy = Math.floor((event.clientY - gridTop) / cell);
@@ -96,8 +112,9 @@ export function WaterChannel({ onComplete }: { onComplete: () => void }) {
       });
       void playTap(cellSolved(c));
       if (isSolved(puzzle)) {
-        phase = "flowing";
-        flowStart = performance.now();
+        phase = "breathing";
+        breathStep = 0;
+        stepStart = performance.now();
       }
     }
 
@@ -235,27 +252,63 @@ export function WaterChannel({ onComplete }: { onComplete: () => void }) {
         }
         ctx!.globalAlpha = 1;
 
-        let frontIdx = -1;
-        let frontFrac = 0;
-        if (phase === "flowing") {
-          const elapsed = (now - flowStart) / 1000;
-          const total = 1.0 + puzzle.path.length * 0.44;
-          const raw = Math.min(1, elapsed / total);
-          flowProgress = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2;
-          const dist = flowProgress * puzzle.path.length;
-          frontIdx = Math.min(puzzle.path.length - 1, Math.floor(dist));
-          frontFrac = Math.min(1, dist - frontIdx);
+        // The water's level as two marks along the path: the head it has
+        // reached, and the tail it has drained back to. Breathing in moves
+        // the head forward; breathing out moves the tail after it, so the
+        // water always travels the one way a channel runs.
+        const len = puzzle.path.length;
+        let headPos = 0;
+        let tailPos = 0;
+        if (phase === "breathing") {
+          if (breathStep >= BREATH_STEPS) {
+            headPos = len;
+            tailPos = 0;
+          } else {
+            const dur = stepDuration(breathStep, timing);
+            const raw = Math.min(1, (now - stepStart) / dur);
+            const eased = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2;
+            if (stepIsInhale(breathStep)) {
+              headPos = eased * len;
+              tailPos = 0;
+            } else {
+              headPos = len;
+              tailPos = eased * len;
+            }
+            if (raw >= 1) {
+              breathStep += 1;
+              stepStart = now;
+            }
+          }
         }
+        const headIdx = Math.min(len - 1, Math.floor(headPos));
+        const headFrac = Math.min(1, headPos - headIdx);
+        const tailIdx = Math.floor(tailPos);
+        const tailFrac = tailPos - tailIdx;
 
-        for (let i = 0; i < puzzle.path.length; i++) {
+        for (let i = 0; i < len; i++) {
           const c = puzzle.cells[puzzle.path[i]];
           const bob = bobOffset(c, now);
           const px = gridLeft + c.x * cell + cell / 2 + bob.x;
           const py = gridTop + c.y * cell + cell / 2 + bob.y;
-          const wet = phase === "flowing" && i < frontIdx;
-          drawPipe(c, px, py, wet ? colorWet : colorDry, colorOff);
-          if (phase === "flowing" && i === frontIdx) {
-            drawWetting(c, px, py, frontFrac, colorWet);
+
+          drawPipe(c, px, py, colorDry, colorOff);
+
+          if (phase === "breathing") {
+            // How much water this stretch is still holding.
+            let held = 0;
+            if (i < tailIdx || i > headIdx) held = 0;
+            else if (i === tailIdx && tailPos > 0) held = 1 - tailFrac;
+            else if (i === headIdx) held = 0;
+            else held = 1;
+
+            if (held > 0) {
+              ctx!.globalAlpha = held;
+              drawPipe(c, px, py, colorWet, colorOff);
+              ctx!.globalAlpha = 1;
+            }
+            if (i === headIdx && headFrac > 0 && headIdx >= tailIdx) {
+              drawWetting(c, px, py, headFrac, colorWet);
+            }
           }
         }
 
@@ -286,7 +339,7 @@ export function WaterChannel({ onComplete }: { onComplete: () => void }) {
         );
         ctx!.stroke();
 
-        if (phase === "flowing" && flowProgress >= 1 && !celebrating && !mark) {
+        if (phase === "breathing" && breathStep >= BREATH_STEPS && !celebrating && !mark) {
           celebrating = true;
           celebrateStart = now;
           void playCelebration();

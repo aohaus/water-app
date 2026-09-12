@@ -11,7 +11,13 @@ import { useMediaSession } from "@/lib/audio/useMediaSession";
 import { createWaterEngine } from "@/lib/audio/water";
 import { createWavesEngine } from "@/lib/audio/waves";
 import { createRainEngine } from "@/lib/audio/rain";
-import { hasPlayedToday, markPlayedToday, resolveIdentity, type Identity } from "@/lib/puzzle/gate";
+import {
+  daysCompleted,
+  hasPlayedToday,
+  markPlayedToday,
+  resolveIdentity,
+  type Identity,
+} from "@/lib/puzzle/gate";
 
 // The day's channel opens the app once, then dissolves into the sounds.
 // "settling" keeps it mounted while it fades, so the two cross-fade
@@ -29,9 +35,11 @@ export default function Home() {
   const [stage, setStage] = useState<Stage>("relax");
   const [played, setPlayed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [days, setDays] = useState(0);
   const identityRef = useRef<Identity | null>(null);
 
   useEffect(() => {
+    setDays(daysCompleted());
     if (hasPlayedToday()) setPlayed(true);
     else setStage("channel");
     let cancelled = false;
@@ -104,7 +112,7 @@ export default function Home() {
       {played && stage !== "channel" && <ChannelMark onRetry={handleRetry} />}
       {(stage === "channel" || stage === "settling") && (
         <div className={`channel-stage${stage === "settling" ? " channel-stage--out" : ""}`}>
-          <WaterChannel key={attempt} onComplete={handleChannelComplete} />
+          <WaterChannel key={attempt} onComplete={handleChannelComplete} daysCompleted={days} />
         </div>
       )}
     </>
