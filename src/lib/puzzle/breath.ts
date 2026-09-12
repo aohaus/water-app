@@ -8,7 +8,7 @@
 // This is a calm practice, not a medical one, and it is capped so it never
 // turns into an endurance test.
 
-export const BREATH_INHALES = 3;
+export const BREATH_CYCLES = 2;
 
 const INHALE_MS = 4000;
 const EXHALE_START_MS = 4000;
@@ -23,13 +23,14 @@ export function breathTiming(daysCompleted: number): BreathTiming {
 }
 
 /**
- * Breathe in, out, in, out, in — ending full, so the drop has somewhere to
- * form. Even steps fill, odd steps drain.
+ * The water has already rushed the channel and the glow has landed, so the
+ * breathing starts from a full channel: out, in, out, in — ending full
+ * again, where the drop can form. Even steps drain, odd steps fill.
  */
-export const BREATH_STEPS = BREATH_INHALES * 2 - 1;
+export const BREATH_STEPS = BREATH_CYCLES * 2;
 
 export function stepIsInhale(step: number): boolean {
-  return step % 2 === 0;
+  return step % 2 === 1;
 }
 
 export function stepDuration(step: number, timing: BreathTiming): number {

@@ -18,8 +18,10 @@ import { playCelebration, playTap } from "@/lib/puzzle/sfx";
 import { BREATH_STEPS, breathTiming, stepDuration, stepIsInhale } from "@/lib/puzzle/breath";
 
 const CELEBRATE_MS = 1700;
+/** The water rushes the finished channel — the reward lands here, not 20s later. */
+const ARRIVAL_MS = 1300;
 
-type Phase = "playing" | "breathing" | "done";
+type Phase = "playing" | "arrival" | "breathing" | "done";
 type Ripple = { x: number; y: number; t0: number };
 type Sparkle = { x: number; y: number; delay: number; dur: number; size: number };
 type Mark = { x: number; y: number; homeX: number; homeY: number };
@@ -46,6 +48,7 @@ export function WaterChannel({
     const puzzle: Puzzle = buildPuzzle();
     const timing = breathTiming(daysRef.current);
     let phase: Phase = "playing";
+    let arrivalStart = 0;
     let breathStep = 0;
     let stepStart = 0;
     let celebrating = false;
@@ -93,7 +96,7 @@ export function WaterChannel({
       event.preventDefault();
       // Some days you just want the sounds: a touch anywhere leaves the
       // breathing early rather than holding you there.
-      if (phase === "breathing" && !celebrating) {
+      if (phase === "breathing") {
         breathStep = BREATH_STEPS;
         return;
       }
@@ -112,9 +115,8 @@ export function WaterChannel({
       });
       void playTap(cellSolved(c));
       if (isSolved(puzzle)) {
-        phase = "breathing";
-        breathStep = 0;
-        stepStart = performance.now();
+        phase = "arrival";
+        arrivalStart = performance.now();
       }
     }
 
@@ -143,6 +145,42 @@ export function WaterChannel({
       };
     }
 
+    function parseHex(value: string): [number, number, number] {
+      const hex = value.replace("#", "").trim();
+      const full = hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex;
+      const n = Number.parseInt(full, 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+
+    function mix(a: [number, number, number], b: [number, number, number], t: number): string {
+      const r = Math.round(a[0] + (b[0] - a[0]) * t);
+      const g = Math.round(a[1] + (b[1] - a[1]) * t);
+      const bl = Math.round(a[2] + (b[2] - a[2]) * t);
+      return `rgb(${r},${g},${bl})`;
+    }
+
+    /** `depth` 0 is the resting ground, 1 is the ground with a full channel. */
+    function paintGround(depth: number) {
+      const top = mix(parseHex(token("--channel-top")), parseHex(token("--channel-deep-top")), depth);
+      const bottom = mix(
+        parseHex(token("--channel-bottom")),
+        parseHex(token("--channel-deep-bottom")),
+        depth,
+      );
+      const grad = ctx!.createRadialGradient(
+        width / 2,
+        height * 0.2,
+        0,
+        width / 2,
+        height * 0.2,
+        Math.max(width, height) * 0.9,
+      );
+      grad.addColorStop(0, top);
+      grad.addColorStop(1, bottom);
+      ctx!.fillStyle = grad;
+      ctx!.fillRect(0, 0, width, height);
+    }
+
     function armTip(dir: number, len: number): [number, number] {
       if (dir === N) return [0, -len];
       if (dir === E) return [len, 0];
@@ -151,25 +189,59 @@ export function WaterChannel({
       return [0, 0];
     }
 
-    function drawPipe(c: Cell, px: number, py: number, color: string, colorOff: string) {
-      const spinT = c.spin ? Math.min(1, (performance.now() - c.spin) / 260) : 1;
-      const ease = easeSettle(spinT);
-      const dirs = rotateCW(c.trueDirs, ((c.rot % 4) + 4) % 4);
-      const stroke = cellSolved(c) ? color : colorOff;
-      const arm = cell * 0.46;
-
-      ctx!.save();
-      ctx!.translate(px, py);
-      if (c.spin) ctx!.rotate((1 - ease) * (Math.PI / 2) * -1);
-      ctx!.strokeStyle = stroke;
-      ctx!.lineWidth = cell * 0.3;
-      ctx!.lineCap = "round";
+    function traceArms(dirs: number, arm: number) {
       ctx!.beginPath();
       if (dirs & N) { ctx!.moveTo(0, 0); ctx!.lineTo(0, -arm); }
       if (dirs & E) { ctx!.moveTo(0, 0); ctx!.lineTo(arm, 0); }
       if (dirs & S) { ctx!.moveTo(0, 0); ctx!.lineTo(0, arm); }
       if (dirs & W) { ctx!.moveTo(0, 0); ctx!.lineTo(-arm, 0); }
+    }
+
+    /**
+     * Drawn as a cut channel rather than a bar: a shadow so it sits above
+     * the ground, pale banks either side, and a darker bed between them
+     * that something can run along. `fall` darkens the bed a little toward
+     * the outlet, so the ground it runs down is legible.
+     */
+    function drawPipe(
+      c: Cell,
+      px: number,
+      py: number,
+      color: string,
+      colorOff: string,
+      fall = 0,
+    ) {
+      const spinT = c.spin ? Math.min(1, (performance.now() - c.spin) / 260) : 1;
+      const ease = easeSettle(spinT);
+      const dirs = rotateCW(c.trueDirs, ((c.rot % 4) + 4) % 4);
+      const solved = cellSolved(c);
+      const stroke = solved ? color : colorOff;
+      const arm = cell * 0.46;
+
+      ctx!.save();
+      ctx!.translate(px, py);
+      if (c.spin) ctx!.rotate((1 - ease) * (Math.PI / 2) * -1);
+      ctx!.lineCap = "round";
+
+      // Banks: the full width, lighter, with a shadow underneath.
+      ctx!.save();
+      ctx!.shadowColor = "rgba(4, 26, 38, 0.32)";
+      ctx!.shadowBlur = cell * 0.09;
+      ctx!.shadowOffsetY = cell * 0.045;
+      ctx!.strokeStyle = stroke;
+      ctx!.lineWidth = cell * 0.3;
+      traceArms(dirs, arm);
       ctx!.stroke();
+      ctx!.restore();
+
+      // Bed: a narrower, darker channel sunk into the banks.
+      ctx!.globalAlpha = solved ? 0.42 + fall * 0.22 : 0.28;
+      ctx!.strokeStyle = "#04212f";
+      ctx!.lineWidth = cell * 0.17;
+      traceArms(dirs, arm * 0.96);
+      ctx!.stroke();
+      ctx!.globalAlpha = 1;
+
       ctx!.fillStyle = stroke;
       ctx!.beginPath();
       ctx!.arc(0, 0, cell * 0.12, 0, Math.PI * 2);
@@ -238,20 +310,6 @@ export function WaterChannel({
         const colorDry = token("--pipe-on");
         const colorWet = token("--pipe-flow");
 
-        // Ripples sit under the pipes, so a piece reads as resting on the
-        // water it carries.
-        tapRipples = tapRipples.filter((r) => now - r.t0 < 520);
-        for (const r of tapRipples) {
-          const t = (now - r.t0) / 520;
-          ctx!.globalAlpha = Math.max(0, 0.35 * (1 - t));
-          ctx!.strokeStyle = token("--ring");
-          ctx!.lineWidth = 2;
-          ctx!.beginPath();
-          ctx!.arc(r.x, r.y, cell * (0.15 + t * 0.55), 0, Math.PI * 2);
-          ctx!.stroke();
-        }
-        ctx!.globalAlpha = 1;
-
         // The water's level as two marks along the path: the head it has
         // reached, and the tail it has drained back to. Breathing in moves
         // the head forward; breathing out moves the tail after it, so the
@@ -259,7 +317,23 @@ export function WaterChannel({
         const len = puzzle.path.length;
         let headPos = 0;
         let tailPos = 0;
-        if (phase === "breathing") {
+        if (phase === "arrival") {
+          const raw = Math.min(1, (now - arrivalStart) / ARRIVAL_MS);
+          const eased = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2;
+          headPos = eased * len;
+          if (raw >= 1) {
+            // Reaching the outlet is the moment worth celebrating. The
+            // breathing starts underneath it, so the glow dissolves into
+            // the first exhale rather than queueing behind it.
+            phase = "breathing";
+            breathStep = 0;
+            stepStart = now;
+            celebrating = true;
+            celebrateStart = now;
+            void playCelebration();
+            spawnSparkles();
+          }
+        } else if (phase === "breathing") {
           if (breathStep >= BREATH_STEPS) {
             headPos = len;
             tailPos = 0;
@@ -285,15 +359,37 @@ export function WaterChannel({
         const tailIdx = Math.floor(tailPos);
         const tailFrac = tailPos - tailIdx;
 
+        // The ground breathes with the water: it deepens as the channel
+        // fills and lifts as it drains, so the rhythm is on the whole
+        // screen rather than only in the pipes.
+        const held = Math.max(0, Math.min(1, (headPos - tailPos) / len));
+        paintGround(reducedMotion ? 0.35 : held);
+
+        // Ripples sit under the pipes, so a piece reads as resting on the
+        // water it carries.
+        tapRipples = tapRipples.filter((r) => now - r.t0 < 520);
+        for (const r of tapRipples) {
+          const t = (now - r.t0) / 520;
+          ctx!.globalAlpha = Math.max(0, 0.35 * (1 - t));
+          ctx!.strokeStyle = token("--ring");
+          ctx!.lineWidth = 2;
+          ctx!.beginPath();
+          ctx!.arc(r.x, r.y, cell * (0.15 + t * 0.55), 0, Math.PI * 2);
+          ctx!.stroke();
+        }
+        ctx!.globalAlpha = 1;
+
         for (let i = 0; i < len; i++) {
           const c = puzzle.cells[puzzle.path[i]];
           const bob = bobOffset(c, now);
           const px = gridLeft + c.x * cell + cell / 2 + bob.x;
           const py = gridTop + c.y * cell + cell / 2 + bob.y;
 
-          drawPipe(c, px, py, colorDry, colorOff);
+          // Downhill: the bed sits deeper the further along the run it is.
+          const fall = len > 1 ? i / (len - 1) : 0;
+          drawPipe(c, px, py, colorDry, colorOff, fall);
 
-          if (phase === "breathing") {
+          if (phase === "arrival" || phase === "breathing") {
             // How much water this stretch is still holding.
             let held = 0;
             if (i < tailIdx || i > headIdx) held = 0;
@@ -303,7 +399,7 @@ export function WaterChannel({
 
             if (held > 0) {
               ctx!.globalAlpha = held;
-              drawPipe(c, px, py, colorWet, colorOff);
+              drawPipe(c, px, py, colorWet, colorOff, fall);
               ctx!.globalAlpha = 1;
             }
             if (i === headIdx && headFrac > 0 && headIdx >= tailIdx) {
@@ -339,15 +435,23 @@ export function WaterChannel({
         );
         ctx!.stroke();
 
-        if (phase === "breathing" && breathStep >= BREATH_STEPS && !celebrating && !mark) {
-          celebrating = true;
-          celebrateStart = now;
-          void playCelebration();
-          spawnSparkles();
+        // Breathing done, channel full: the drop can form and the day can
+        // close.
+        if (phase === "breathing" && breathStep >= BREATH_STEPS && !mark) {
+          const x = gridLeft + out.x * cell + cell / 2;
+          const y = gridTop + out.y * cell + cell / 2;
+          mark = { x, y, homeX: 34, homeY: height - 34 };
+          markProgress = 0;
+          window.setTimeout(
+            () => {
+              finalRipple = { x, y, r: 0 };
+            },
+            reducedMotion ? 50 : 650,
+          );
         }
 
-        // A real beat once the water arrives: the channel pulses twice —
-        // an arrival, then a settle — while light glints along it.
+        // A real beat the moment the water arrives: the channel pulses
+        // twice — an arrival, then a settle — while light glints along it.
         if (celebrating) {
           const ct = Math.min(1, (now - celebrateStart) / CELEBRATE_MS);
           const first = Math.sin(Math.min(ct / 0.55, 1) * Math.PI);
@@ -389,19 +493,7 @@ export function WaterChannel({
           }
           ctx!.restore();
 
-          if (ct >= 1 && !mark) {
-            celebrating = false;
-            const x = gridLeft + out.x * cell + cell / 2;
-            const y = gridTop + out.y * cell + cell / 2;
-            mark = { x, y, homeX: 34, homeY: height - 34 };
-            markProgress = 0;
-            window.setTimeout(
-              () => {
-                finalRipple = { x, y, r: 0 };
-              },
-              reducedMotion ? 50 : 650,
-            );
-          }
+          if (ct >= 1) celebrating = false;
         }
       }
 

@@ -9,8 +9,10 @@
   --pipe-on: rgba(45, 110, 145, 0.9);
   --pipe-flow: #2f9fd6;
   --mark: rgba(70, 130, 160, 0.55);
-  --channel-top: #eef4f7;
-  --channel-bottom: #d7e6ee;
+  --channel-top: #e4eff6;
+  --channel-bottom: #cbdfec;
+  --channel-deep-top: #a8cadf;
+  --channel-deep-bottom: #7ba7c4;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,6 +31,8 @@
        read as pipes rather than shapes floating on near-black. */
     --channel-top: #123240;
     --channel-bottom: #081b24;
+    --channel-deep-top: #1d566e;
+    --channel-deep-bottom: #0b2f41;
     color-scheme: dark;
   }
 }
